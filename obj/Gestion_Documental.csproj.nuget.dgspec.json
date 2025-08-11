@@ -50,6 +50,12 @@
       "frameworks": {
         "net8.0": {
           "targetAlias": "net8.0",
+          "dependencies": {
+            "IronWord": {
+              "target": "Package",
+              "version": "[2025.7.13, )"
+            }
+          },
           "imports": [
             "net461",
             "net462",
