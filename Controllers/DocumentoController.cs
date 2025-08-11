@@ -4,11 +4,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Gestion_Documental.Controllers
 {
-    public class HomeController : Controller
+    public class DocumentoController : Controller
     {
-        private readonly ILogger<HomeController> _logger;
+        private readonly ILogger<DocumentoController> _logger;
 
-        public HomeController(ILogger<HomeController> logger)
+        public DocumentoController(ILogger<DocumentoController> logger)
         {
             _logger = logger;
         }
