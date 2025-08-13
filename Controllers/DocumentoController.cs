@@ -1,32 +1,37 @@
-using System.Diagnostics;
-using Gestion_Documental.Models;
+using System.Web;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Gestion_Documental.Controllers
+public class DocumentoController : Controller
 {
-    public class DocumentoController : Controller
+    //vista con el btn de filepicker
+    public IActionResult Index() => View();
+
+    //visor generico con iframe
+    public IActionResult Previsualizacion(string src, string titulo = "Vista Previa")
     {
-        private readonly ILogger<DocumentoController> _logger;
+        if (string.IsNullOrWhiteSpace(src)) return RedirectToAction(nameof(Index));//si no hay archivo, redirige a la vista principal
 
-        public DocumentoController(ILogger<DocumentoController> logger)
+        //si viene un docx/xlsx/pptx directo, lo vamos a envolver con office online
+        if (!src.Contains("view.officeapps.live.com") && //q no este en formato de visualizacion de office online
+            (src.EndsWith(".docx", StringComparison.OrdinalIgnoreCase) ||
+            src.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) ||
+            src.EndsWith(".pptx", StringComparison.OrdinalIgnoreCase)))
+
         {
-            _logger = logger;
+            var urlEnc = HttpUtility.UrlEncode(src); // se codifica la url para q sea segura para la web
+            src = $"https://view.officeapps.live.com/op/embed.aspx?src={urlEnc}";// le decimos al visor q archivo abrir, lo muestra incrustado dentro de un iframe
+            //visor de office online
         }
 
-        public IActionResult Index()
-        {
-            return View();
-        }
+        ViewBag.Titulo = titulo; //manda el titulo para mostrar en la vista
+        ViewBag.Src = src; //manda la url final
+        return View();
 
-        public IActionResult Privacy()
-        {
-            return View();
-        }
-
-        [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-        public IActionResult Error()
-        {
-            return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
-        }
     }
+
+
+    // private static readonly List<(string Titulo, string Url, string Tipo)> _demo = new()
+    // {
+
+    // };
 }
