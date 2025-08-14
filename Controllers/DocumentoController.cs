@@ -1,4 +1,4 @@
-using System.Web;
+using System.Net;
 using Microsoft.AspNetCore.Mvc;
 
 public class DocumentoController : Controller
@@ -18,7 +18,7 @@ public class DocumentoController : Controller
             src.EndsWith(".pptx", StringComparison.OrdinalIgnoreCase)))
 
         {
-            var urlEnc = HttpUtility.UrlEncode(src); // se codifica la url para q sea segura para la web
+            var urlEnc = WebUtility.UrlEncode(src); // se codifica la url para q sea segura para la web
             src = $"https://view.officeapps.live.com/op/embed.aspx?src={urlEnc}";// le decimos al visor q archivo abrir, lo muestra incrustado dentro de un iframe
             //visor de office online
         }

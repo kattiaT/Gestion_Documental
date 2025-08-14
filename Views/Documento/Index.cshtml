@@ -1,5 +1,57 @@
 @{
-    ViewData["Title"] = "Bienvenido a la página de Documentos";
+    ViewData["Title"] = "Documentos";
 }
 
-<h2>Seleccionar hello onedrive/sharepoint</h2>
+<h2>Seleccionar desde OneDrive/sharepoint</h2>
+
+<button id="seleccionar" class="btn btn-primary">Abrir File Picker</button>
+
+@* sdk de filepicker *@
+<script src="https://js.live.net/v7.2/OneDrive.js"></script>
+
+<script>
+    document.getElementById("seleccionar").onclick = () => {
+        OneDrive.open({
+            clientId: "52018a23-987c-4555-a09d-9f9559d1044f",
+            action: "pick",
+            multiSelect: false,
+
+            advanced: {
+                redirectUri:"https://localhost:7112", 
+                scopes: "files.read" 
+                //filter: ".docx,.xlsx,.pptx,.pdf"
+            },
+            success: (respuesta) => {
+                const item = Array.isArray(respuesta?.value) ? respuesta.value[0] : null;
+                if (!item) return; // No se seleccionó ningún archivo
+
+                //office(word, excel, powerpoint): abrir con office online embebido
+                if (/\.(docx|xlsx|pptx)$/i.test(item.name)) //vemos en q termina el nombre del archivo
+                {
+                    const urlEnc = encodeURIComponent(item.webUrl); //la hacemos formato seguro
+                    const urlEmbed= `https://view.officeapps.live.com/op/embed.aspx?src=${urlEnc}`; //(visor)servicio  de MOffice para ver documentos en línea (abre archivo en OO embedido).
+                    window.location.href = `/Documento/Previsualizacion?src=${encodeURIComponent(urlEmbed)}&titulo=${encodeURIComponent(item.name)}`; //redirige al preview
+                    return;
+                }
+
+                //pdf
+                if (/\.(pdf)$/i.test(item.name)) //si termina en pdf
+                {
+                    window.location.href = `/Documento/Previsualizacion?src=${encodeURIComponent(item.webUrl)}&titulo=${encodeURIComponent(item.name)}`;
+                    return;
+                }
+
+                // si es otro archivo, abre en nueva pestaña o lo descarga segun tipo
+                window.open(item.webUrl, "_blank", "noopener");
+            },
+            cancel: () => console.log("Cancelado por el usuario"),
+            error: (e) => {
+                console.error("Error picker", e);
+                alert("No se pudo abrir el File Picker (si el tenant pide aprobación de admin, pensar en plan b)");
+            }
+           
+        });
+    };
+</script>
+
+
