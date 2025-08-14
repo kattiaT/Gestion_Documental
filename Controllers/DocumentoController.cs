@@ -34,4 +34,9 @@ public class DocumentoController : Controller
     // {
 
     // };
+
+    public IActionResult GoogleDemo()
+    {
+        return View();
+    }
 }
