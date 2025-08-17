@@ -1,42 +1,68 @@
-using System.Net;
+using Google.Apis.Docs.v1;
+using Google.Apis.Drive.v3;
 using Microsoft.AspNetCore.Mvc;
+using System.IO;
+using System.Threading.Tasks;
 
 public class DocumentoController : Controller
 {
-    //vista con el btn de filepicker
-    public IActionResult Index() => View();
+    private readonly DocsService _docsService;
+    private readonly DriveService _driveService;
 
-    //visor generico con iframe
-    public IActionResult Previsualizacion(string src, string titulo = "Vista Previa")
+    // Constructor modificado para recibir los servicios
+    public DocumentoController(DocsService docsService, DriveService driveService)
     {
-        if (string.IsNullOrWhiteSpace(src)) return RedirectToAction(nameof(Index));//si no hay archivo, redirige a la vista principal
-
-        //si viene un docx/xlsx/pptx directo, lo vamos a envolver con office online
-        if (!src.Contains("view.officeapps.live.com") && //q no este en formato de visualizacion de office online
-            (src.EndsWith(".docx", StringComparison.OrdinalIgnoreCase) ||
-            src.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) ||
-            src.EndsWith(".pptx", StringComparison.OrdinalIgnoreCase)))
-
-        {
-            var urlEnc = WebUtility.UrlEncode(src); // se codifica la url para q sea segura para la web
-            src = $"https://view.officeapps.live.com/op/embed.aspx?src={urlEnc}";// le decimos al visor q archivo abrir, lo muestra incrustado dentro de un iframe
-            //visor de office online
-        }
-
-        ViewBag.Titulo = titulo; //manda el titulo para mostrar en la vista
-        ViewBag.Src = src; //manda la url final
-        return View();
-
+        _docsService = docsService;
+        _driveService = driveService;
     }
 
-
-    // private static readonly List<(string Titulo, string Url, string Tipo)> _demo = new()
-    // {
-
-    // };
-
-    public IActionResult GoogleDemo()
+    public async Task<IActionResult> ObtenerDocumento(string idDocumento)
     {
-        return View();
+        var request = _docsService.Documents.Get(idDocumento);
+        var documento = await request.ExecuteAsync();
+        return View(documento);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> SubirDocumento(IFormFile documento)
+    {
+        if (documento != null && documento.Length > 0)
+        { 
+            //se crea objeto con info del archivo q se sube a drive
+            var metadataArchivo = new Google.Apis.Drive.v3.Data.File
+            {
+                Name = documento.FileName,
+                MimeType = documento.ContentType
+            };
+
+            using (var stream = new MemoryStream())
+            {
+                // 1) Copiar el archivo subido al stream en memoria
+                await documento.CopyToAsync(stream);
+
+                // 2) MUY IMPORTANTE: rebobinar(volver a dejar el puntero al inicio) el stream al inicio
+                stream.Position = 0;
+
+                // 3) Preparar la petición de subida
+                var request = _driveService.Files.Create(metadataArchivo, stream, documento.ContentType);
+                request.Fields = "id"; // Pedimos sólo el ID en la respuesta
+
+                // 4) Subir a drive
+                await request.UploadAsync();
+
+                // 5) Obtener el "File" real desde la respuesta de la request
+                var archivo = request.ResponseBody;      // ESTE sí tiene Id
+                var idArchivo = archivo.Id;                 // ahora compila
+
+                // 6) Pasar datos a la vista
+                ViewBag.Document = new
+                {
+                    Url = $"https://drive.google.com/file/d/{idArchivo}/view",
+                    Id = idArchivo
+                };
+            }
+        }
+
+        return View("Index");
     }
 }

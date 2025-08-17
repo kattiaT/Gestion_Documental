@@ -1,72 +1,30 @@
 @{
-    ViewData["Title"] = "Demo Google Docs";
+    ViewData["Title"] = "Gestión de Documentos";
 }
 
-<h2>Demo: Gestión Documental con Google Drive</h2>
+<h1>Gestión de Documentos</h1>
 
-<button id="pickerBtn" class="btn btn-primary">Seleccionar documento</button>
-<br /><br />
+@* Formulario para subir un documento *@
+<form method="post" action="/Documento/SubirDocumento" enctype="multipart/form-data">
+    <label for="documento">Seleccionar Documento:</label>
+    <input type="file" id="documento" name="documento" required />
+    <button type="submit">Subir Documento</button>
+</form>
 
-<iframe id="docFrame" src="" width="100%" height="600" style="border:1px solid #ccc;"></iframe>
-
-@section Scripts {
-    <script src="https://apis.google.com/js/api.js"></script>
-    <script>
-        let authToken;
-        let pickerApiLoaded = false;
-
-        function onApiLoad() {
-            gapi.load('auth', { 'callback': onAuthApiLoad });
-            gapi.load('picker', { 'callback': onPickerApiLoad });
-        }
-
-        function onAuthApiLoad() {
-            window.gapi.auth.authorize({
-                client_id: '303826226951-9df1v77pn5lvlg72ljk13uleeeqvrjfd.apps.googleusercontent.com',
-                scope: ['https://www.googleapis.com/auth/drive.readonly'],
-                immediate: false
-            }, handleAuthResult);
-        }
-
-        function handleAuthResult(authResult) {
-            if (authResult && !authResult.error) {
-                authToken = authResult.access_token;
-                createPicker();
-            } else {
-                alert("Error de autenticación: " + authResult.error);
-            }
-        }
-
-        function onPickerApiLoad() {
-            pickerApiLoaded = true;
-        }
-
-        function createPicker() {
-            if (pickerApiLoaded && authToken) {
-                const picker = new google.picker.PickerBuilder()
-                    .addView(google.picker.ViewId.DOCUMENTS)
-                    .setOAuthToken(authToken)
-                    .setDeveloperKey('AIzaSyCZGJV0liueX_qRCnfOr5__2sstwyQa_qk')
-                    .setCallback(pickerCallback)
-                    .build();
-                picker.setVisible(true);
-            } else {
-                alert("Error: Picker API no está cargado o no hay token de autenticación.");
-            }
-        }
-
-        function pickerCallback(data) {
-            if (data[google.picker.Response.ACTION] === google.picker.Action.PICKED) {
-                const fileId = data[google.picker.Response.DOCUMENTS][0][google.picker.Document.ID];
-                const url = `https://docs.google.com/document/d/${fileId}/edit?embedded=true`;
-                document.getElementById('docFrame').src = url;
-            } else if (data[google.picker.Response.ACTION] === google.picker.Action.CANCEL) {
-                alert("Selección cancelada.");
-            }
-        }
-
-        document.getElementById('pickerBtn').addEventListener('click', () => {
-            onApiLoad();
-        });
-    </script>
+@* Mostrar datos del documento solo si el servidor ya mandó información en ViewBag *@
+@if (ViewBag.Document != null)
+{
+    <h2>Documento Cargado:</h2>
+    <div>
+        <a href="@ViewBag.Document.Url" target="_blank">Ver Documento</a>
+        <button onclick="editarDocumento('@ViewBag.Document.Id')">Editar Documento</button>
+    </div>
 }
+
+@* Script con la función para redirigir al usuario a la acción Editar *@
+<script>
+    function editarDocumento(id) {
+        // Lógica para editar el documento
+        window.location.href = '/Documento/Editar/' + id;
+    }
+</script>

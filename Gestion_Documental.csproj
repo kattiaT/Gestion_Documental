@@ -7,6 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Google.Apis.Auth" Version="1.70.0" />
+    <PackageReference Include="Google.Apis.Docs.v1" Version="1.69.0.3736" />
+    <PackageReference Include="Google.Apis.Drive.v3" Version="1.70.0.3856" />
     <PackageReference Include="IronWord" Version="2025.7.13" />
     <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="8.0.7" />
   </ItemGroup>
