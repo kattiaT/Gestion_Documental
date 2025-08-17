@@ -50,7 +50,7 @@ public class DocumentoController : Controller
                 // 4) Subir a drive
                 await request.UploadAsync();
 
-                // 5) Obtener el "File" real desde la respuesta de la request
+                // 5) Obtener el archivo desde la respuesta de la request
                 var archivo = request.ResponseBody;      // ESTE sí tiene Id
                 var idArchivo = archivo.Id;                 // ahora compila
 
