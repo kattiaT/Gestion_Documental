@@ -1,5 +1,7 @@
 using Google.Apis.Docs.v1;
 using Google.Apis.Drive.v3;
+using Google.Apis.Auth.AspNetCore3; // Asegúrate de que este espacio de nombres esté presente
+using Google.Apis.Services; // Agregar este espacio de nombres
 using Microsoft.AspNetCore.Mvc;
 using System.IO;
 using System.Threading.Tasks;
@@ -8,12 +10,19 @@ public class DocumentoController : Controller
 {
     private readonly DocsService _docsService;
     private readonly DriveService _driveService;
+    private readonly IGoogleAuthProvider _auth; // Inyectar el proveedor de autenticación
 
     // Constructor modificado para recibir los servicios
-    public DocumentoController(DocsService docsService, DriveService driveService)
+    public DocumentoController(DocsService docsService, DriveService driveService, IGoogleAuthProvider auth)
     {
         _docsService = docsService;
         _driveService = driveService;
+        _auth = auth; // Asignar el proveedor de autenticación
+    }
+
+    public IActionResult Index()
+    {
+        return View();
     }
 
     public async Task<IActionResult> ObtenerDocumento(string idDocumento)
@@ -26,9 +35,18 @@ public class DocumentoController : Controller
     [HttpPost]
     public async Task<IActionResult> SubirDocumento(IFormFile documento)
     {
+        if (!User.Identity.IsAuthenticated)
+        {
+            return RedirectToAction("Login", "Account"); // Redirigir a la página de inicio de sesión
+        }
+        var cred = await _auth.GetCredentialAsync(); // Obtener credenciales del usuario
+        var drive = new DriveService(new BaseClientService.Initializer {
+            HttpClientInitializer = cred,
+            ApplicationName = "Gestion-de-Documentos"
+        });
+
         if (documento != null && documento.Length > 0)
         { 
-            //se crea objeto con info del archivo q se sube a drive
             var metadataArchivo = new Google.Apis.Drive.v3.Data.File
             {
                 Name = documento.FileName,
@@ -37,24 +55,16 @@ public class DocumentoController : Controller
 
             using (var stream = new MemoryStream())
             {
-                // 1) Copiar el archivo subido al stream en memoria
                 await documento.CopyToAsync(stream);
-
-                // 2) MUY IMPORTANTE: rebobinar(volver a dejar el puntero al inicio) el stream al inicio
                 stream.Position = 0;
 
-                // 3) Preparar la petición de subida
-                var request = _driveService.Files.Create(metadataArchivo, stream, documento.ContentType);
+                var request = drive.Files.Create(metadataArchivo, stream, documento.ContentType);
                 request.Fields = "id"; // Pedimos sólo el ID en la respuesta
 
-                // 4) Subir a drive
                 await request.UploadAsync();
+                var archivo = request.ResponseBody; // Obtener el archivo desde la respuesta
+                var idArchivo = archivo.Id;
 
-                // 5) Obtener el archivo desde la respuesta de la request
-                var archivo = request.ResponseBody;      // ESTE sí tiene Id
-                var idArchivo = archivo.Id;                 // ahora compila
-
-                // 6) Pasar datos a la vista
                 ViewBag.Document = new
                 {
                     Url = $"https://drive.google.com/file/d/{idArchivo}/view",

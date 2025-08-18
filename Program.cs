@@ -1,61 +1,33 @@
-using Google.Apis.Auth.OAuth2;
+using Google.Apis.Auth.AspNetCore3;
 using Google.Apis.Docs.v1;
 using Google.Apis.Drive.v3;
-using Google.Apis.Services;
+using Microsoft.AspNetCore.Authentication.Cookies;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Agregar servicios al contenedor
+// Autenticación + OAuth Google
+builder.Services
+  .AddAuthentication(o => {
+    o.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+    o.DefaultChallengeScheme = GoogleOpenIdConnectDefaults.AuthenticationScheme;
+  })
+  .AddCookie()
+  .AddGoogleOpenIdConnect(options => {
+    options.ClientId = "428769162918-6l5b97b76sqeitpb8fb1ln4158koidf8.apps.googleusercontent.com"; // del JSON
+    options.ClientSecret = "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"; // del JSON
+    options.Scope.Add(DriveService.Scope.Drive);
+    options.Scope.Add(DocsService.Scope.Documents);
+  });
+
 builder.Services.AddControllersWithViews();
-
-// Cargar las credenciales y configurar los servicios aquí
-GoogleCredential credenciales;
-
-// Cargar las credenciales desde el archivo JSON
-using (var stream = new FileStream("client_secret_428769162918-6l5b97b76sqeitpb8fb1ln4158koidf8.apps.googleusercontent.com.json", FileMode.Open, FileAccess.Read))
-{
-    credenciales = GoogleCredential.FromStream(stream)
-        .CreateScoped(DriveService.Scope.Drive);
-}
-
-// Configurar el servicio de Google Docs
-builder.Services.AddSingleton<DocsService>(sp =>
-{
-    return new DocsService(new BaseClientService.Initializer()
-    {
-        HttpClientInitializer = credenciales,
-        ApplicationName = "Gestion-de-Documentos",
-    });
-});
-
-// Configurar el servicio de Google Drive
-builder.Services.AddSingleton<DriveService>(sp =>
-{
-    return new DriveService(new BaseClientService.Initializer()
-    {
-        HttpClientInitializer = credenciales,
-        ApplicationName = "Gestion-de-Documentos",
-    });
-});
+builder.Services.AddScoped<DocsService>();
+builder.Services.AddScoped<DriveService>();
+builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
-
-// Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler("/Home/Error");
-    app.UseHsts();
-}
-
-app.UseHttpsRedirection();
-app.UseStaticFiles();
-
-app.UseRouting();
-
+app.UseAuthentication();
 app.UseAuthorization();
-
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Documento}/{action=Index}/{id?}");
-
+    pattern: "{controller=Documento}/{action=Index}/{id?}"); // Asegúrate de que esta línea esté presente
 app.Run();
