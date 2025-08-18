@@ -1,59 +1,39 @@
-@{
-    ViewData["Title"] = "Gestión de Documentos";
-}
-
-<h1>Gestión de Documentos</h1>
-
-@* Formulario para subir un documento *@
-<form method="post" action="/Documento/SubirDocumento" enctype="multipart/form-data">
-    <label for="documento">Seleccionar Documento:</label>
-    <input type="file" id="documento" name="documento" required />
-    <button type="submit">Subir Documento</button>
-</form>
-
-@* Mostrar la lista de archivos subidos *@
-<h2>Documentos Subidos</h2>
-<table>
-    <thead>
-        <tr>
-            <th>Nombre del Archivo</th>
-            <th>Acciones</th>
-        </tr>
-    </thead>
-    <tbody>
-        @if (ViewBag.Files != null && ViewBag.Files.Count > 0)
-        {
-            foreach (var file in ViewBag.Files)
-            {
-                <tr>
-                    <td>@file.Name</td>
-                    <td>
-                        <a href="@Url.Action("ObtenerDocumento", new { idDocumento = file.Id })">Ver Previa</a>
-                    </td>
-                </tr>
-            }
-        }
-        else
-        {
-            <tr>
-                <td colspan="2">No hay documentos subidos.</td>
-            </tr>
-        }
-    </tbody>
-</table>
-@if (ViewBag.Document != null)
+@if (User.Identity?.IsAuthenticated ?? false)
 {
-    <h2>Documento Cargado:</h2>
-    <div>
-        <a href="@ViewBag.Document.Url" target="_blank">Ver Documento</a>
-        <button onclick="editarDocumento('@ViewBag.Document.Id')">Editar Documento</button>
+    <h2>Subir y Visualizar Documento</h2>
+
+    <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" name="archivo" id="archivo" required />
+        <button type="submit">Subir</button>
+    </form>
+
+    <iframe id="docViewer" style="display:none; width:100%; height:500px;" frameborder="0"></iframe>
+}
+else
+{
+    <div class="alert alert-warning">
+        Debes iniciar sesión con Google antes de subir documentos.  
+        <a class="btn btn-primary" asp-controller="Documento" asp-action="Login">Iniciar sesión</a>
     </div>
 }
 
-@* Script con la función para redirigir al usuario a la acción Editar *@
+@section Scripts {
 <script>
-    function editarDocumento(id) {
-        // Lógica para editar el documento
-        window.location.href = '/Documento/Editar/' + id;
+document.getElementById('uploadForm')?.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const fd = new FormData();
+    fd.append('archivo', document.getElementById('archivo').files[0]);
+
+    const resp = await fetch('/Documento/Subir', { method: 'POST', body: fd });
+    if (!resp.ok) {
+        const errorText = await resp.text();
+        alert("Error al subir: " + errorText);
+        return;
     }
+    const data = await resp.json();
+    const iframe = document.getElementById('docViewer');
+    iframe.src = data.previewUrl;
+    iframe.style.display = 'block';
+});
 </script>
+}
