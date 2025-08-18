@@ -16,10 +16,19 @@ builder.Services
   .AddGoogleOpenIdConnect(options =>
   {
     options.ClientId = "428769162918-6l5b97b76sqeitpb8fb1ln4158koidf8.apps.googleusercontent.com"; // del JSON
-    options.ClientSecret = "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"; // del JSON}
+    options.ClientSecret = "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"; // del JSON
     options.CallbackPath = "/signin-google";   // explícito
-    options.Scope.Add(DriveService.Scope.Drive);
-    options.Scope.Add(DocsService.Scope.Documents);
+
+    // Scopes necesarios
+    options.Scope.Clear();
+    options.Scope.Add("openid");
+    options.Scope.Add("email");
+    options.Scope.Add("profile");
+    options.Scope.Add("https://www.googleapis.com/auth/drive.file");
+
+    // Habilitar el guardado de tokens
+    options.SaveTokens = true;
+    options.Prompt = "consent";  // fuerza pantalla de consentimiento una vez
   });
 
 builder.Services.AddControllersWithViews();

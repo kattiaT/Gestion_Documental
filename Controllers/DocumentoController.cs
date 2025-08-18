@@ -1,63 +1,46 @@
-using Google.Apis.Docs.v1;
-using Google.Apis.Drive.v3;
-using Google.Apis.Auth.AspNetCore3; 
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Http; 
-using System.Collections.Generic;
-using System.IO; 
+using Google.Apis.Drive.v3;
+using Microsoft.AspNetCore.Http;
 using System.Threading.Tasks;
 
 public class DocumentoController : Controller
 {
-    private readonly DocsService _docsService;
-    private readonly DriveService _driveService;
-    private readonly IGoogleAuthProvider _auth;
+    private readonly DriveService _drive;
 
-    public DocumentoController(DocsService docsService, DriveService driveService, IGoogleAuthProvider auth)
+    public DocumentoController(DriveService drive)
     {
-        _docsService = docsService;
-        _driveService = driveService;
-        _auth = auth;
+        _drive = drive;
     }
 
     public async Task<IActionResult> Index()
     {
-        var documentos = await _driveService.Files.List().ExecuteAsync();
-        ViewBag.Files = documentos.Files; // Asegúrate de que esto esté configurado correctamente
-        return View();
+        var req = _drive.Files.List();
+        req.PageSize = 10;
+        req.Fields = "files(id, name, mimeType)";
+        var result = await req.ExecuteAsync();  // << Ya NO debe lanzar Forbidden
+        return View(result.Files);
     }
 
     [HttpPost]
-    public async Task<IActionResult> GuardarCambios(IFormFile documento)
+    public async Task<IActionResult> Subir(IFormFile archivo)
     {
-        if (!User.Identity.IsAuthenticated)
+        if (archivo is null || archivo.Length == 0)
+            return BadRequest("Archivo vacío.");
+
+        var fileMeta = new Google.Apis.Drive.v3.Data.File
         {
-            return Challenge(new AuthenticationProperties { RedirectUri = Url.Action("SubirDocumento") });
-        }
+            Name = archivo.FileName
+        };
 
-        if (documento != null && documento.Length > 0)
-        {
-            using (var stream = new MemoryStream())
-            {
-                await documento.CopyToAsync(stream);
-                var fileMetadata = new Google.Apis.Drive.v3.Data.File()
-                {
-                    Name = documento.FileName,
-                    MimeType = documento.ContentType
-                };
+        using var stream = archivo.OpenReadStream();
+        var req = _drive.Files.Create(fileMeta, stream, archivo.ContentType);
+        req.Fields = "id, name";
+        var uploaded = await req.UploadAsync();
 
-                var request = _driveService.Files.Create(fileMetadata, stream, documento.ContentType);
-                request.Fields = "id";
-                var file = await request.UploadAsync();
-            }
-        }
+        if (uploaded.Status != Google.Apis.Upload.UploadStatus.Completed)
+            throw uploaded.Exception ?? new Exception("Falló la subida.");
 
-        return RedirectToAction("Index");
-    }
-
-    public IActionResult SubirDocumento()
-    {
-        return View();
+        var created = req.ResponseBody;
+        return Ok(new { created.Id, created.Name });
     }
 }
