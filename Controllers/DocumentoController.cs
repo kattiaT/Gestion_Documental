@@ -1,78 +1,63 @@
 using Google.Apis.Docs.v1;
 using Google.Apis.Drive.v3;
-using Google.Apis.Auth.AspNetCore3; // Asegúrate de que este espacio de nombres esté presente
-using Google.Apis.Services; // Agregar este espacio de nombres
+using Google.Apis.Auth.AspNetCore3; 
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
-using System.IO;
+using Microsoft.AspNetCore.Http; 
+using System.Collections.Generic;
+using System.IO; 
 using System.Threading.Tasks;
 
 public class DocumentoController : Controller
 {
     private readonly DocsService _docsService;
     private readonly DriveService _driveService;
-    private readonly IGoogleAuthProvider _auth; // Inyectar el proveedor de autenticación
+    private readonly IGoogleAuthProvider _auth;
 
-    // Constructor modificado para recibir los servicios
     public DocumentoController(DocsService docsService, DriveService driveService, IGoogleAuthProvider auth)
     {
         _docsService = docsService;
         _driveService = driveService;
-        _auth = auth; // Asignar el proveedor de autenticación
+        _auth = auth;
     }
 
-    public IActionResult Index()
+    public async Task<IActionResult> Index()
     {
+        var documentos = await _driveService.Files.List().ExecuteAsync();
+        ViewBag.Files = documentos.Files; // Asegúrate de que esto esté configurado correctamente
         return View();
     }
 
-    public async Task<IActionResult> ObtenerDocumento(string idDocumento)
-    {
-        var request = _docsService.Documents.Get(idDocumento);
-        var documento = await request.ExecuteAsync();
-        return View(documento);
-    }
-
     [HttpPost]
-    public async Task<IActionResult> SubirDocumento(IFormFile documento)
+    public async Task<IActionResult> GuardarCambios(IFormFile documento)
     {
         if (!User.Identity.IsAuthenticated)
         {
-            return RedirectToAction("Login", "Account"); // Redirigir a la página de inicio de sesión
+            return Challenge(new AuthenticationProperties { RedirectUri = Url.Action("SubirDocumento") });
         }
-        var cred = await _auth.GetCredentialAsync(); // Obtener credenciales del usuario
-        var drive = new DriveService(new BaseClientService.Initializer {
-            HttpClientInitializer = cred,
-            ApplicationName = "Gestion-de-Documentos"
-        });
 
         if (documento != null && documento.Length > 0)
-        { 
-            var metadataArchivo = new Google.Apis.Drive.v3.Data.File
-            {
-                Name = documento.FileName,
-                MimeType = documento.ContentType
-            };
-
+        {
             using (var stream = new MemoryStream())
             {
                 await documento.CopyToAsync(stream);
-                stream.Position = 0;
-
-                var request = drive.Files.Create(metadataArchivo, stream, documento.ContentType);
-                request.Fields = "id"; // Pedimos sólo el ID en la respuesta
-
-                await request.UploadAsync();
-                var archivo = request.ResponseBody; // Obtener el archivo desde la respuesta
-                var idArchivo = archivo.Id;
-
-                ViewBag.Document = new
+                var fileMetadata = new Google.Apis.Drive.v3.Data.File()
                 {
-                    Url = $"https://drive.google.com/file/d/{idArchivo}/view",
-                    Id = idArchivo
+                    Name = documento.FileName,
+                    MimeType = documento.ContentType
                 };
+
+                var request = _driveService.Files.Create(fileMetadata, stream, documento.ContentType);
+                request.Fields = "id";
+                var file = await request.UploadAsync();
             }
         }
 
-        return View("Index");
+        return RedirectToAction("Index");
+    }
+
+    public IActionResult SubirDocumento()
+    {
+        return View();
     }
 }

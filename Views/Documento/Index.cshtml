@@ -11,7 +11,36 @@
     <button type="submit">Subir Documento</button>
 </form>
 
-@* Mostrar datos del documento solo si el servidor ya mandó información en ViewBag *@
+@* Mostrar la lista de archivos subidos *@
+<h2>Documentos Subidos</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Nombre del Archivo</th>
+            <th>Acciones</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (ViewBag.Files != null && ViewBag.Files.Count > 0)
+        {
+            foreach (var file in ViewBag.Files)
+            {
+                <tr>
+                    <td>@file.Name</td>
+                    <td>
+                        <a href="@Url.Action("ObtenerDocumento", new { idDocumento = file.Id })">Ver Previa</a>
+                    </td>
+                </tr>
+            }
+        }
+        else
+        {
+            <tr>
+                <td colspan="2">No hay documentos subidos.</td>
+            </tr>
+        }
+    </tbody>
+</table>
 @if (ViewBag.Document != null)
 {
     <h2>Documento Cargado:</h2>

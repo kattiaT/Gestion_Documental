@@ -1,0 +1,18 @@
+@{
+    ViewData["Title"] = "Subir Documento";
+}
+
+<h2>Subir Documento</h2>
+
+<form asp-action="GuardarCambios" method="post" enctype="multipart/form-data">
+    <div>
+        <label for="documento">Seleccionar Documento:</label>
+        <input type="file" id="documento" name="documento" accept=".pdf" required />
+    </div>
+    <button type="submit">Subir</button>
+</form>
+
+<h3>Documentos Subidos</h3>
+<ul id="documentList">
+    <!-- Aquí se mostrarán los documentos subidos -->
+</ul>
