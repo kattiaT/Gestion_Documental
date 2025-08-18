@@ -56,13 +56,13 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
-app.UseStaticFiles();
+app.UseHttpsRedirection();   // middleware que obliga a usar HTTPS
+app.UseStaticFiles();        // middleware que sirve archivos estáticos (css, js, imágenes)
 
-app.UseRouting();
+app.UseRouting();            // decide a qué controlador/action mandar la petición
 
-app.UseAuthentication();
-app.UseAuthorization();
+app.UseAuthentication();     // middleware de autenticación (verifica si hay un usuario logueado)
+app.UseAuthorization();      // middleware de autorización (verifica si tiene permisos/roles)
 
 // Ruta por defecto
 app.MapControllerRoute(

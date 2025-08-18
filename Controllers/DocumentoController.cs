@@ -11,43 +11,47 @@ using DrivePermission = Google.Apis.Drive.v3.Data.Permission;
 
 public class DocumentoController : Controller
 {
-    private const string AppFolderName = "Gestion_Documental"; // carpeta fija en tu Drive
+    private const string NombreArchivoDrive = "Gestion_Documental"; // carpeta fija en el Drive
 
     // ===== Helpers =====
-    private DriveService? GetDrive()
+
+    //obtiene un cliente de google drive
+    private DriveService? GetDrive() //da null si no hay token, sino esta logueado
     {
         var accessToken = HttpContext.GetTokenAsync("Google", "access_token")
-                                     .GetAwaiter().GetResult();
-        if (string.IsNullOrEmpty(accessToken)) return null;
+                                     .GetAwaiter().GetResult();//se guardan los token
 
-        var cred = GoogleCredential.FromAccessToken(accessToken);
-        return new DriveService(new BaseClientService.Initializer
+        if (string.IsNullOrEmpty(accessToken)) return null; //null si no hay token
+
+        var credenciales = GoogleCredential.FromAccessToken(accessToken);
+        return new DriveService(new BaseClientService.Initializer //se crea cliente de google drive, quien hace las llamadas a la api
         {
-            HttpClientInitializer = cred,
-            ApplicationName = "Gestion_Documental"
+            HttpClientInitializer = credenciales, //le damos las credenciales
+            ApplicationName = "Gestion_Documental" //google lo guarda en los registros para saber quien usa la api
         });
     }
 
-    private async Task<string> EnsureAppFolderAsync(DriveService drive)
+    //
+    private async Task<string> crearCarpeta(DriveService drive)
     {
         // Buscar carpeta por nombre
-        var list = drive.Files.List();
-        list.Q = $"mimeType='application/vnd.google-apps.folder' and name='{AppFolderName}' and trashed=false";
-        list.Fields = "files(id,name)";
-        var res = await list.ExecuteAsync();
-        if (res.Files?.Count > 0) return res.Files[0].Id;
+        var list = drive.Files.List(); //lista de archivos
+        list.Q = $"mimeType='application/vnd.google-apps.folder' and name='{NombreArchivoDrive}' and trashed=false"; //filtramos
+        list.Fields = "files(id,name)"; //propiedades q devuelve cada archivo
+        var respuesta = await list.ExecuteAsync(); //ejecuta
+        if (respuesta.Files?.Count > 0) return respuesta.Files[0].Id; //devuelve el identificador único de Drive de esa carpeta, sino es null. si es null pasa a crear la carpeta
 
         // Crear si no existe
-        var meta = new DriveFile { Name = AppFolderName, MimeType = "application/vnd.google-apps.folder" };
-        var create = drive.Files.Create(meta);
-        create.Fields = "id";
-        var folder = await create.ExecuteAsync();
-        return folder.Id;
+        var meta = new DriveFile { Name = NombreArchivoDrive, MimeType = "application/vnd.google-apps.folder" };
+        var crear = drive.Files.Create(meta);//se crea archivo nuevo con los metadatos indicados
+        crear.Fields = "id";//solo da el id de la carpeta creada
+        var carpeta = await crear.ExecuteAsync();//ejecuta
+        return carpeta.Id;
     }
 
     // ===== UI =====
     [HttpGet]
-    [Authorize] // si querés forzar login al entrar
+    [Authorize] //forzar login al entrar
     public IActionResult Index() => View();
 
     // ===== API =====
@@ -55,13 +59,13 @@ public class DocumentoController : Controller
     [Authorize]
     public async Task<IActionResult> Listar()
     {
-        var drive = GetDrive();
+        var drive = GetDrive(); //cliente de google drive
         if (drive is null) return Unauthorized("Inicia sesión con Google.");
 
-        var folderId = await EnsureAppFolderAsync(drive);
+        var idCarpeta = await crearCarpeta(drive);
 
-        var req = drive.Files.List();
-        req.Q = $"'{folderId}' in parents and trashed=false";
+        var req = drive.Files.List(); //request a la api de drive para obtener lista de archivos de drive si los hay
+        req.Q = $"'{idCarpeta}' in parents and trashed=false";
         req.Fields = "files(id,name,mimeType,modifiedTime)";
         req.OrderBy = "modifiedTime desc";
         var result = await req.ExecuteAsync();
@@ -81,7 +85,7 @@ public class DocumentoController : Controller
             var drive = GetDrive();
             if (drive is null) return Unauthorized("Inicia sesión con Google.");
 
-            var folderId = await EnsureAppFolderAsync(drive);
+            var folderId = await crearCarpeta(drive);
 
             // metadata + parent folder
             var meta = new DriveFile { Name = archivo.FileName, Parents = new[] { folderId } };
