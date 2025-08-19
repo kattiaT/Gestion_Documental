@@ -10,8 +10,8 @@ builder.Services.AddControllersWithViews();
 // Auth Google
 builder.Services.AddAuthentication(options =>
 {
-    options.DefaultScheme = "Cookies";
-    options.DefaultChallengeScheme = "Google";
+    options.DefaultScheme = "Cookies"; //como se recuerdad al usuario(cookie)
+    options.DefaultChallengeScheme = "Google"; //proveedor por defecto cuando se necesita login
 })
 .AddCookie()
 .AddGoogle(options =>
@@ -19,13 +19,14 @@ builder.Services.AddAuthentication(options =>
     options.ClientId = "428769162918-6l5b97b76sqeitpb8fb1ln4158koidf8.apps.googleusercontent.com";
     options.ClientSecret = "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";
 
-    options.Scope.Clear();
-    options.Scope.Add("openid");
-    options.Scope.Add("email");
-    options.Scope.Add("profile");
-    options.Scope.Add("https://www.googleapis.com/auth/drive.file");
+    // Scopes: q permisos le pedimos al usuario en google
+    options.Scope.Clear(); //quita todos los scopes q el middleware de google añade por defecto
+    options.Scope.Add("openid"); //identidad
+    options.Scope.Add("email"); //correo
+    options.Scope.Add("profile"); //nombre, foto
+    options.Scope.Add("https://www.googleapis.com/auth/drive.file"); //permisos para acceder a los archivos del usuario en Drive de la app
 
-    options.SaveTokens = true;
+    options.SaveTokens = true; // guarda access_token / id_token en la cookie
 
     // Forzar refresh_token y consentimiento
     options.Events.OnRedirectToAuthorizationEndpoint = context =>
@@ -36,16 +37,16 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-// Para leer tokens desde HttpContext en tus controladores
+// Para leer tokens desde HttpContext en los controladores
 builder.Services.AddHttpContextAccessor();
 
-// Política global: todo requiere login (puedes quitarla si prefieres)
+// Política global: todo requiere login
 builder.Services.AddAuthorization(opts =>
 {
     opts.FallbackPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .Build();
-});
+}); //sino tiene authorize ni allowAnonymous? todas las rutas requieren login
 
 var app = builder.Build();
 

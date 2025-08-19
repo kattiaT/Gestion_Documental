@@ -4,59 +4,230 @@
 
 <h3>Documentos</h3>
 
+@* formulario *@
 <div class="mb-3">
-    <form id="uploadForm" enctype="multipart/form-data">
+    <form id="archivoForm" enctype="multipart/form-data">
         <input type="file" name="archivo" id="archivo" required />
         <button type="submit" class="btn btn-primary btn-sm">Subir</button>
         <a class="btn btn-outline-secondary btn-sm" asp-controller="Documento" asp-action="Logout">Cerrar sesión</a>
     </form>
 </div>
 
-<div class="row">
-    <div class="col-md-5">
-        <ul id="lista" class="list-group"></ul>
+<div class="row g-3">
+    <!-- Lista -->
+    <div class="col-lg-4"><!-- un poco más angosta para dar aire al visor -->
+        <div class="doc-card">
+            <!-- Cabecera con buscador -->
+            <div class="list-header">
+                <input id="buscador" type="search" class="form-control form-control-sm" placeholder="Buscar por nombre…"
+                    aria-label="Buscar documento">
+            </div>
+
+            <ul id="lista" class="list-group doc-list"></ul>
+
+            <!-- Pie con contador -->
+            <div id="resumenLista" class="list-footer">0 documentos</div>
+        </div>
     </div>
-    <div class="col-md-7">
-        <iframe id="docViewer" style="display:none; width:100%; height:520px;" frameborder="0"></iframe>
+
+    <!-- Visor -->
+    <div class="col-lg-8">
+        <div class="doc-card p-3 doc-view-sticky">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="text-truncate"><strong id="tituloDoc">Selecciona un documento</strong></div>
+                <a id="btnAbrir" href="#" target="_blank" class="btn btn-sm btn-outline-secondary disabled"
+                    aria-disabled="true">Abrir en pestaña</a>
+            </div>
+            <div id="previewWrap" class="preview-wrap">
+                <iframe id="vistaDoc" class="preview-frame" style="display:none;"></iframe>
+            </div>
+        </div>
     </div>
 </div>
 
+<!-- (tu modal móvil puede quedarse igual; no hace falta tocarlo) -->
+
+<!-- Modal para móvil -->
+<div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen-sm-down modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="me-auto text-truncate"><strong id="modalTitulo"></strong></div>
+                <a id="modalAbrir" class="btn btn-sm btn-outline-secondary" target="_blank">Abrir en pestaña</a>
+                <button type="button" class="btn-close ms-2" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="previewWrapModal" class="preview-wrap">
+                    <iframe id="vistaDocModal" class="preview-frame"></iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
 @section Scripts {
-<script>
-async function cargarLista() {
-    const r = await fetch('/Documento/Listar');
-    if (!r.ok) { alert(await r.text()); return; }
-    const files = await r.json();
+    <script>
+        // ===== Detectar si la pantalla es "móvil" (menos de 992px) =====
+        const esMovil = () => window.matchMedia('(max-width: 991.98px)').matches;
 
-    const ul = document.getElementById('lista');
-    ul.innerHTML = '';
-    files.forEach(f => {
-        const li = document.createElement('li');
-        li.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
-        li.textContent = f.name;
-        li.style.cursor = 'pointer';
-        li.onclick = () => ver(f.id);
-        ul.appendChild(li);
-    });
-}
+        // ===== Estado en memoria =====
+        let _todos = [];        // todos los archivos del backend
+        let _filtrados = [];    // archivos luego del filtro por texto
+        let _seleccion = null;  // id del archivo seleccionado
 
-function ver(id) {
-    const iframe = document.getElementById('docViewer');
-    iframe.src = `https://drive.google.com/file/d/${id}/preview`;
-    iframe.style.display = 'block';
-}
+        // ===== Helpers para nombres “bonitos” e iconos =====
+        // quita extensión y reemplaza _/- por espacios
+        function nombreBonito(n) {
+            if (!n) return '';
+            const sinExt = n.replace(/\.[^.]+$/, '');
+            return sinExt.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+        }
+        // extrae extensión (PDF, DOCX, etc.)
+        function getExt(n) {
+            const m = (n || '').match(/\.([^.]+)$/);
+            return m ? m[1].toUpperCase() : '';
+        }
+        // icono simple por tipo de archivo / mime
+        function iconoPorMime(mime, ext) {
+            const mm = (mime || '').toLowerCase();
+            if (mm.includes('pdf') || ext === 'PDF') return '📄';
+            if (mm.includes('word') || ['DOC', 'DOCX', 'ODT', 'RTF'].includes(ext)) return '📝';
+            if (mm.includes('sheet') || ['XLS', 'XLSX', 'ODS', 'CSV', 'TSV'].includes(ext)) return '📊';
+            if (mm.includes('presentation') || ['PPT', 'PPTX', 'ODP'].includes(ext)) return '📽️';
+            if (mm.startsWith('image/')) return '🖼️';
+            return '📁';
+        }
 
-document.getElementById('uploadForm').addEventListener('submit', async function (e) {
-    e.preventDefault();
-    const fd = new FormData();
-    fd.append('archivo', document.getElementById('archivo').files[0]);
-    const resp = await fetch('/Documento/Subir', { method: 'POST', body: fd });
-    if (!resp.ok) { alert("Error al subir: " + await resp.text()); return; }
-    await cargarLista();
-    const data = await resp.json();
-    ver(data.id);
-});
+        // ===== Renderiza la lista en el <ul id="lista"> =====
+        function pintarLista() {
+            const ul = document.getElementById('lista');
+            ul.innerHTML = ''; // limpia la lista
 
-cargarLista(); // al cargar la página
-</script>
+            _filtrados.forEach(f => {
+                const li = document.createElement('li');
+                li.className = 'list-group-item list-group-item-action';
+                if (_seleccion === f.id) li.classList.add('active'); // marca seleccionado
+
+                // fila visual (icono + título 2 líneas + badge extensión)
+                const row = document.createElement('div');
+                row.className = 'file-row';
+
+                const ic = document.createElement('div');
+                ic.className = 'file-ic';
+                const ext = getExt(f.name || '');
+                ic.textContent = iconoPorMime(f.mimeType, ext);
+
+                const title = document.createElement('div');
+                title.className = 'file-title';
+                title.textContent = nombreBonito(f.name || ''); // nombre “bonito”
+                title.title = f.name || ''; // tooltip con nombre completo
+
+                const badge = document.createElement('span');
+                badge.className = 'badge-ext';
+                badge.textContent = ext || 'FILE';
+
+                row.appendChild(ic);
+                row.appendChild(title);
+                row.appendChild(badge);
+                li.appendChild(row);
+
+                // click para ver el documento
+                li.onclick = () => {
+                    _seleccion = f.id;
+                    ver(f.id, f.name);
+                    pintarLista(); // repinta para actualizar el 'active'
+                };
+
+                ul.appendChild(li);
+            });
+
+            // contador al pie (si existe)
+            const resumen = document.getElementById('resumenLista');
+            if (resumen) resumen.textContent = `${_filtrados.length} documento${_filtrados.length === 1 ? '' : 's'}`;
+        }
+
+        // ===== Filtro por texto (buscador) =====
+        function aplicarFiltro() {
+            const q = (document.getElementById('buscador')?.value || '').trim().toLowerCase();
+            if (!q) {
+                _filtrados = [..._todos];
+            } else {
+                _filtrados = _todos.filter(f => (f.name || '').toLowerCase().includes(q));
+            }
+            pintarLista();
+        }
+
+        // ===== Carga la lista desde el backend =====
+        async function cargarLista() {
+            const r = await fetch('/Documento/Listar'); // petición GET
+            if (!r.ok) { alert(await r.text()); return; }
+            _todos = await r.json();   // guarda todos los archivos
+            _filtrados = [..._todos];  // inicia sin filtro
+            pintarLista();             // pinta en pantalla
+        }
+
+        // ===== Mostrar documento (panel derecho ó modal según pantalla) =====
+        function ver(id, nombre) {
+
+            const urlPreview = `https://drive.google.com/file/d/${id}/preview`; // viewer HTML (no dispara descarga)
+            const urlAbrir = `https://drive.google.com/file/d/${id}/view`;    // abrir en pestaña
+
+            if (esMovil()) {
+                // --- Modal (móvil / pantallas pequeñas) ---
+                document.getElementById('modalTitulo').textContent = nombre;
+                document.getElementById('modalAbrir').href = urlAbrir;
+
+                const wrapM = document.getElementById('previewWrapModal');
+                const iframeM = document.getElementById('vistaDocModal');
+                wrapM.classList.add('loading');       // muestra "Cargando…"
+                iframeM.src = urlPreview;             // carga el doc
+                iframeM.onload = () => wrapM.classList.remove('loading');
+
+                const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('previewModal'));
+                modal.show();
+            } else {
+                // --- Panel derecho (escritorio) ---
+                document.getElementById('tituloDoc').textContent = nombre;
+
+                const btn = document.getElementById('btnAbrir'); // botón "Abrir en pestaña"
+                btn.href = urlAbrir;
+                btn.classList.remove('disabled');
+                btn.removeAttribute('aria-disabled');
+
+                const wrap = document.getElementById('previewWrap');
+                const iframe = document.getElementById('vistaDoc');
+                iframe.style.display = 'block';
+                wrap.classList.add('loading');        // muestra "Cargando…"
+                iframe.src = urlPreview;              // carga el doc
+                iframe.onload = () => wrap.classList.remove('loading');
+            }
+        }
+
+        // ===== Subir archivo - recarga lista - muestra el subido =====
+        document.getElementById('archivoForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault(); // no recargar página
+
+            const input = document.getElementById('archivo');
+            if (!input?.files?.length) { alert('Selecciona un archivo.'); return; }
+
+            const fd = new FormData(); // objeto especial para enviar archivos
+            fd.append('archivo', input.files[0]);
+
+            const resp = await fetch('/Documento/Subir', { method: 'POST', body: fd });
+            if (!resp.ok) { alert("Error al subir: " + await resp.text()); return; }
+
+            const data = await resp.json(); // respuesta del backend (id, name, previewUrl)
+            await cargarLista();            // recarga lista desde Drive
+            _seleccion = data.id;           // marca el nuevo como seleccionado
+            ver(data.id, data.name ?? input.files[0].name); // abre el visor
+            pintarLista();                  // repinta para ver el 'active'
+        });
+
+        // ===== Buscador en vivo =====
+        document.getElementById('buscador')?.addEventListener('input', aplicarFiltro);
+
+        // ===== Al cargar la página =====
+        cargarLista();
+    </script>
 }

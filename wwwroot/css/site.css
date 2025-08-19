@@ -8,7 +8,11 @@ html {
   }
 }
 
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+.btn:focus,
+.btn:active:focus,
+.btn-link.nav-link:focus,
+.form-control:focus,
+.form-check-input:focus {
   box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
 }
 
@@ -20,3 +24,128 @@ html {
 body {
   margin-bottom: 60px;
 }
+
+/* ////////////////////////////////////////////// */
+
+/* --- Fila visual para cada archivo --- */
+.file-row{ 
+  display:flex; align-items:center; gap:.6rem; 
+}
+
+/* Icono/cuadro de tipo */
+.file-ic{
+  width:22px; height:22px; border-radius:6px;
+  background:#eef4ff; 
+  display:flex; align-items:center; justify-content:center;
+  font-size:.65rem; font-weight:700; color:#2b4c7e;
+  flex:0 0 22px;
+}
+
+/* Título a 2 líneas con corte elegante */
+.file-title{
+  flex: 1;
+  overflow: hidden;
+
+  /* Hack clásico para clamp en Chrome/Edge/Safari */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;   /* navegadores WebKit/Blink */
+
+  /* Propiedad estándar (Firefox y futuros) */
+  line-clamp: 2;
+
+  line-height: 1.15;
+
+  /* Para nombres muy largos sin espacios */
+  overflow-wrap: anywhere;   /* rompe tokens largos si es necesario */
+  word-break: break-word;
+  hyphens: auto;
+}
+
+/* Badge para extensión a la derecha (opcional) */
+.badge-ext{
+  font-size:.7rem; 
+  color:#6c757d; 
+  background:#f6f7f9; 
+  border:1px solid #e6e6e6; 
+  padding:.12rem .35rem; 
+  border-radius:6px;
+}
+
+/* Quitamos el corte "raro" que teníamos en toda la li */
+.list-group-item{
+  white-space:normal;         /* ← ya no forzamos una línea */
+  overflow:visible; 
+  text-overflow:clip;
+}
+
+/* ===== Visor (iframe) ===== */
+
+/* Contenedor del iframe: nos sirve para el spinner y para controlar altura */
+.preview-wrap{
+  position: relative;
+  overflow: hidden;         /* evita barras internas raras */
+}
+
+/* Iframe con altura flexible (panel derecho en escritorio) */
+.preview-frame{
+  width: 100%;
+  display: block;
+  border: 0;
+  border-radius: 12px;
+  /* Alto: nunca menos de 560px, normalmente ~80% del viewport, y tope 92% */
+  height: clamp(560px, 80vh, 92vh);
+}
+
+/* El panel derecho no debe recortar el iframe */
+.doc-view-sticky{
+  position: sticky;
+  top: 12px;
+  overflow: visible;
+}
+
+/* ===== Modal: que el iframe use toda la altura útil ===== */
+.modal-body{ padding: 0; }             /* quitamos padding del cuerpo del modal */
+.modal .preview-wrap{
+  /* 100vh menos el header del modal (~110–130px). Ajusta si tu header es más alto. */
+  height: calc(100vh - 120px);
+}
+.modal .preview-frame{
+  height: 100% !important;             /* el iframe llena el contenedor */
+}
+
+/* === Marco fino, uniforme en los 4 lados del visor === */
+
+/* 1) Reset: sin padding ni fondo extra en el contenedor */
+.preview-wrap{
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  padding: 0 !important;             /* quita el marco grueso si quedó */
+  background: transparent !important;
+}
+
+/* 2) Apaga la franja superior antigua si existiera */
+.preview-wrap::before{ content: ""; display: none; }
+
+/* 3) Dibuja un marco fino uniforme con sombra interna */
+.preview-wrap::after{
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;              /* no tapa clics del visor */
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 6px #111;  /* grosor del borde: 6px (ajusta 4–8px) */
+}
+
+/* Mantén tu altura del iframe como la tenías */
+.preview-frame{
+  width: 100%;
+  display: block;
+  border: 0;
+  border-radius: 12px;               /* coincide con el contenedor */
+  height: clamp(560px, 80vh, 92vh);  /* panel derecho */
+}
+.modal .preview-wrap{ height: calc(100vh - 120px); } /* modal */
+.modal .preview-frame{ height: 100% !important; }
+
