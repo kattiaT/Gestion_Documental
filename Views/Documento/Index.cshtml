@@ -45,8 +45,6 @@
     </div>
 </div>
 
-<!-- (tu modal móvil puede quedarse igual; no hace falta tocarlo) -->
-
 <!-- Modal para móvil -->
 <div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-fullscreen-sm-down modal-xl">
@@ -76,7 +74,7 @@
         let _filtrados = [];    // archivos luego del filtro por texto
         let _seleccion = null;  // id del archivo seleccionado
 
-        // ===== Helpers para nombres “bonitos” e iconos =====
+        // ===== Helpers para nombres e iconos =====
         // quita extensión y reemplaza _/- por espacios
         function nombreBonito(n) {
             if (!n) return '';
@@ -167,7 +165,7 @@
             pintarLista();             // pinta en pantalla
         }
 
-        // ===== Mostrar documento (panel derecho ó modal según pantalla) =====
+        // ===== Mostrar documento (panel derecho o modal según pantalla) =====
         function ver(id, nombre) {
 
             const urlPreview = `https://drive.google.com/file/d/${id}/preview`; // viewer HTML (no dispara descarga)

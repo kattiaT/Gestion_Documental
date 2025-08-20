@@ -13,6 +13,10 @@ public class DocumentoController : Controller
 {
     private const string NombreArchivoDrive = "Gestion_Documental"; // carpeta fija en el Drive
 
+    private readonly string _googleClientId = "428769162918-6l5b97b76sqeitpb8fb1ln4158koidf8.apps.googleusercontent.com";
+    private readonly string _googleClientSecret = "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";
+    // TODO: pásalos a appsettings y léelos con IConfiguration en producción.
+
     //===== Helpers =====
 
     //obtiene un cliente de google drive
