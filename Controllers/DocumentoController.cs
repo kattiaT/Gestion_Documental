@@ -8,6 +8,10 @@ using Google.Apis.Drive.v3;
 using Google.Apis.Upload;
 using DriveFile = Google.Apis.Drive.v3.Data.File;
 using DrivePermission = Google.Apis.Drive.v3.Data.Permission;
+using Google.Apis.Auth.OAuth2.Flows;
+using Google.Apis.Auth.OAuth2.Responses;
+using System.Security.Claims;
+
 
 public class DocumentoController : Controller
 {
@@ -15,19 +19,65 @@ public class DocumentoController : Controller
 
     private readonly string _googleClientId = "428769162918-6l5b97b76sqeitpb8fb1ln4158koidf8.apps.googleusercontent.com";
     private readonly string _googleClientSecret = "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";
-    // TODO: pásalos a appsettings y léelos con IConfiguration en producción.
 
     //===== Helpers =====
 
     //obtiene un cliente de google drive
-    private DriveService? GetDrive() //da null si no hay token, sino esta logueado
+    private async Task<DriveService?> GetDriveAsync() //da null si no hay token, sino esta logueado
     {
-        var accessToken = HttpContext.GetTokenAsync("Google", "access_token")
-                                     .GetAwaiter().GetResult();//se guardan los token
+        // tokens guardados en la cookie por options.SaveTokens = true
+        var auth = await HttpContext.AuthenticateAsync();
+        if (!auth.Succeeded) return null;
+
+        // leemos los tokens desde la cookie de autenticacion
+        var accessToken = auth.Properties.GetTokenValue("access_token");
+        var refreshToken = auth.Properties.GetTokenValue("refresh_token");
+        var expiracion = auth.Properties.GetTokenValue("expires_at"); // viene por SaveTokens
 
         if (string.IsNullOrEmpty(accessToken)) return null; //null si no hay token
 
-        var credenciales = GoogleCredential.FromAccessToken(accessToken);
+        // Si NO hay refresh y el access_token ya venció, pedimos re-login (devolvemos null)
+        if (string.IsNullOrEmpty(refreshToken) &&
+            DateTimeOffset.TryParse(expiracion, out var expiresAt) &&
+            expiresAt <= DateTimeOffset.UtcNow.AddMinutes(1))
+        {
+            return null; //se fuerza relogin xq no hay access token activo y no hay refresh token
+        }
+
+        //es de tipo interfaz
+        ICredential credenciales;
+
+        if (!string.IsNullOrEmpty(refreshToken))  //se renueva el token cuando vence
+        {
+            // Flujo que sabe renovar con el refresh_token
+            var flujoAutorizacion = new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
+            {
+                ClientSecrets = new ClientSecrets
+                {
+                    ClientId = _googleClientId,
+                    ClientSecret = _googleClientSecret
+                },
+                Scopes = new[] { DriveService.Scope.DriveFile }
+            });
+
+            var token = new TokenResponse
+            {
+                AccessToken = accessToken,
+                RefreshToken = refreshToken
+            };
+
+            var idUsuario = User.FindFirstValue("sub")
+                       ?? User.FindFirstValue(ClaimTypes.NameIdentifier)
+                       ?? "user";
+
+            credenciales = new UserCredential(flujoAutorizacion, idUsuario, token); //se renueva solo
+        }
+        else //se usa access token, sin refresh token
+        {
+            // Sin refresh_token, funciona mientras no expire
+            credenciales = GoogleCredential.FromAccessToken(accessToken);
+        }
+
         return new DriveService(new BaseClientService.Initializer //se crea cliente de google drive, quien hace las llamadas a la api
         {
             HttpClientInitializer = credenciales, //le damos las credenciales
@@ -65,18 +115,28 @@ public class DocumentoController : Controller
     [Authorize]
     public async Task<IActionResult> Listar()
     {
-        var drive = GetDrive(); //cliente de google drive
-        if (drive is null) return Unauthorized("Inicia sesión con Google.");
+        try
+        {
+            var drive = await GetDriveAsync(); //cliente de google drive
+            if (drive is null)
+                // si no hay drive (token vencido o sin refresh) forzamos re-login
+                return Challenge(new AuthenticationProperties { RedirectUri = Url.Action("Index", "Documento")! }, "Google");
 
-        var idCarpeta = await crearCarpeta(drive);
+            var idCarpeta = await crearCarpeta(drive);
 
-        var req = drive.Files.List(); //request a la api de drive para obtener lista de archivos de drive si los hay
-        req.Q = $"'{idCarpeta}' in parents and trashed=false"; //trae solo los archivos de la carpeta y q no esten en la papelera
-        req.Fields = "files(id,name,mimeType,modifiedTime)"; //propiedades que devuelve cada archivo
-        req.OrderBy = "modifiedTime desc";//ordena por fecha de modificación descendentemente
-        var resultados = await req.ExecuteAsync(); //ejecuta la petición a la API de Drive
+            var req = drive.Files.List(); //request a la api de drive para obtener lista de archivos de drive si los hay
+            req.Q = $"'{idCarpeta}' in parents and trashed=false"; //trae solo los archivos de la carpeta y q no esten en la papelera
+            req.Fields = "files(id,name,mimeType,modifiedTime)"; //propiedades que devuelve cada archivo
+            req.OrderBy = "modifiedTime desc";//ordena por fecha de modificación descendentemente
+            var resultados = await req.ExecuteAsync(); //ejecuta la petición a la API de Drive
 
-        return Ok(resultados.Files?.Select(f => new { f.Id, f.Name, f.MimeType, f.ModifiedTimeDateTimeOffset })); //lista con 4 propiedades, la devuelve en json al navegador
+            return Ok(resultados.Files?.Select(f => new { f.Id, f.Name, f.MimeType, f.ModifiedTimeDateTimeOffset })); //lista con 4 propiedades, la devuelve en json al navegador
+        }
+        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            // si Google responde 401, también forzamos re-login
+            return Challenge(new AuthenticationProperties { RedirectUri = Url.Action("Index", "Documento")! }, "Google");
+        }
     }
 
     //recibe el archivo desde la app y lo guarda en la carpeta de drive
@@ -91,8 +151,10 @@ public class DocumentoController : Controller
                 return BadRequest("Archivo vacío.");
             }
 
-            var drive = GetDrive();
-            if (drive is null) return Unauthorized("Inicia sesión con Google.");
+            var drive = await GetDriveAsync(); 
+            if (drive is null)
+                // si no hay drive válido, forzamos re-login
+                return Challenge(new AuthenticationProperties { RedirectUri = Url.Action("Index", "Documento")! }, "Google");
 
             var idCarpeta = await crearCarpeta(drive);
 
@@ -115,11 +177,17 @@ public class DocumentoController : Controller
             var previewUrl = $"https://drive.google.com/file/d/{datosArchivoCreado.Id}/preview";
             return Ok(new { datosArchivoCreado.Id, datosArchivoCreado.Name, previewUrl }); //da un json al navegador con esos datos
         }
+        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            // si Google responde 401, forzamos re-login
+            return Challenge(new AuthenticationProperties { RedirectUri = Url.Action("Index", "Documento")! }, "Google");
+        }
         catch (Exception ex)
         {
             return StatusCode(500, $"Error interno: {ex.Message}");
         }
     }
+
 
     // ===== Auth =====
     [AllowAnonymous]
