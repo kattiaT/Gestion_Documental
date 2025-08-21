@@ -52,25 +52,25 @@ builder.Services.AddAuthentication(options =>
         context.Response.Redirect(context.RedirectUri + extra);
     };
 
-//borrar despues de pruebas
-    options.Events.OnCreatingTicket += context =>
-    {
-        // Asegúrate de tener: using Microsoft.AspNetCore.Authentication;
-        var tokens = context.Properties.GetTokens()?.ToList() ?? new List<AuthenticationToken>();
+    //borrar despues de pruebas
+    // options.Events.OnCreatingTicket += context =>
+    // {
+    //     // Asegúrate de tener: using Microsoft.AspNetCore.Authentication;
+    //     var tokens = context.Properties.GetTokens()?.ToList() ?? new List<AuthenticationToken>();
 
-        // Forzar expiración rápida del access_token (solo para pruebas)
-        tokens.RemoveAll(t => t.Name == "expires_at");
-        tokens.Add(new AuthenticationToken
-        {
-            Name = "expires_at",
-            Value = DateTime.UtcNow.AddMinutes(1).ToString("o") // ISO 8601
-        });
+    //     // Forzar expiración rápida del access_token (solo para pruebas)
+    //     tokens.RemoveAll(t => t.Name == "expires_at");
+    //     tokens.Add(new AuthenticationToken
+    //     {
+    //         Name = "expires_at",
+    //         Value = DateTime.UtcNow.AddMinutes(1).ToString("o") // ISO 8601
+    //     });
 
-        context.Properties.StoreTokens(tokens);
+    //     context.Properties.StoreTokens(tokens);
 
-        Console.WriteLine("[OAuth] AccessToken marcado para expirar en 1 minuto (modo prueba).");
-        return Task.CompletedTask;
-    };
+    //     Console.WriteLine("[OAuth] AccessToken marcado para expirar en 1 minuto (modo prueba).");
+    //     return Task.CompletedTask;
+    // };
 
 
 
