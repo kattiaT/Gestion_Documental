@@ -23,31 +23,31 @@ public class DocumentoController : Controller
     //===== Helpers =====
 
     //obtiene un cliente de google drive
-    private async Task<DriveService?> GetDriveAsync() //da null si no hay token, sino esta logueado
+    private async Task<DriveService?> GetDriveAsync() // da null si no hay token, sino está logueado
     {
         // tokens guardados en la cookie por options.SaveTokens = true
         var auth = await HttpContext.AuthenticateAsync();
         if (!auth.Succeeded) return null;
 
-        // leemos los tokens desde la cookie de autenticacion
+        // leemos los tokens desde la cookie de autenticación
         var accessToken = auth.Properties.GetTokenValue("access_token");
         var refreshToken = auth.Properties.GetTokenValue("refresh_token");
         var expiracion = auth.Properties.GetTokenValue("expires_at"); // viene por SaveTokens
 
-        if (string.IsNullOrEmpty(accessToken)) return null; //null si no hay token
+        if (string.IsNullOrEmpty(accessToken)) return null; // null si no hay token
 
         // Si NO hay refresh y el access_token ya venció, pedimos re-login (devolvemos null)
         if (string.IsNullOrEmpty(refreshToken) &&
             DateTimeOffset.TryParse(expiracion, out var expiresAt) &&
             expiresAt <= DateTimeOffset.UtcNow.AddMinutes(1))
         {
-            return null; //se fuerza relogin xq no hay access token activo y no hay refresh token
+            return null; // se fuerza relogin xq no hay access token activo y no hay refresh token
         }
 
-        //es de tipo interfaz
+        // es de tipo interfaz
         ICredential credenciales;
 
-        if (!string.IsNullOrEmpty(refreshToken))  //se renueva el token cuando vence
+        if (!string.IsNullOrEmpty(refreshToken))  // se renueva el token cuando vence
         {
             // Flujo que sabe renovar con el refresh_token
             var flujoAutorizacion = new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
@@ -63,25 +63,59 @@ public class DocumentoController : Controller
             var token = new TokenResponse
             {
                 AccessToken = accessToken,
-                RefreshToken = refreshToken
+                RefreshToken = refreshToken,
+                //ExpiresInSeconds = 10 // simula que expira en 10 segundos
+
+
             };
 
             var idUsuario = User.FindFirstValue("sub")
                        ?? User.FindFirstValue(ClaimTypes.NameIdentifier)
                        ?? "user";
 
-            credenciales = new UserCredential(flujoAutorizacion, idUsuario, token); //se renueva solo
+
+            var uc = new UserCredential(flujoAutorizacion, idUsuario, token); // se renueva solo si hace falta
+
+            // Forzamos refresh inmediato si el access_token está vencido o por vencer
+            await uc.RefreshTokenAsync(CancellationToken.None);
+
+            // Persistimos el access_token renovado y su nueva expiración en la cookie
+            var nuevoAccess = uc.Token.AccessToken;
+            var expSeg = uc.Token.ExpiresInSeconds ?? 3600;
+            var nuevaExpiracionUtc = DateTimeOffset.UtcNow.AddSeconds(expSeg);
+
+            // // logs de prueba
+            // Console.WriteLine($"[REFRESH] Nuevo access_token recibido: {nuevoAccess.Substring(0, 15)}...");
+            // Console.WriteLine($"[REFRESH] Expira en: {nuevaExpiracionUtc}");
+
+            var tokens = auth.Properties.GetTokens()?.ToList() ?? new List<AuthenticationToken>();
+            tokens.RemoveAll(t => t.Name == "access_token" || t.Name == "expires_at");
+
+            tokens.Add(new AuthenticationToken { Name = "access_token", Value = nuevoAccess });
+            tokens.Add(new AuthenticationToken { Name = "refresh_token", Value = refreshToken });
+            tokens.Add(new AuthenticationToken { Name = "expires_at", Value = nuevaExpiracionUtc.UtcDateTime.ToString("o") }); // ISO 8601
+
+            auth.Properties.StoreTokens(tokens);
+
+            // Guardamos nuevamente la cookie con los tokens actualizados
+            await HttpContext.SignInAsync(
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                auth.Principal!,   // mismo usuario actual
+                auth.Properties
+            );
+
+            credenciales = uc; // este es el HttpClientInitializer
         }
-        else //se usa access token, sin refresh token
+        else // se usa access token, sin refresh token
         {
             // Sin refresh_token, funciona mientras no expire
             credenciales = GoogleCredential.FromAccessToken(accessToken);
         }
 
-        return new DriveService(new BaseClientService.Initializer //se crea cliente de google drive, quien hace las llamadas a la api
+        return new DriveService(new BaseClientService.Initializer // se crea cliente de google drive, quien hace las llamadas a la api
         {
-            HttpClientInitializer = credenciales, //le damos las credenciales
-            ApplicationName = "Gestion_Documental" //google lo guarda en los registros para saber quien usa la api
+            HttpClientInitializer = credenciales, // le damos las credenciales
+            ApplicationName = "Gestion_Documental" // google lo guarda en los registros para saber quién usa la api
         });
     }
 
