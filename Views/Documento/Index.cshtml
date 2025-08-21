@@ -75,18 +75,15 @@
         let _seleccion = null;  // id del archivo seleccionado
 
         // ===== Helpers para nombres e iconos =====
-        // quita extensión y reemplaza _/- por espacios
         function nombreBonito(n) {
             if (!n) return '';
             const sinExt = n.replace(/\.[^.]+$/, '');
             return sinExt.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
         }
-        // extrae extensión (PDF, DOCX, etc.)
         function getExt(n) {
             const m = (n || '').match(/\.([^.]+)$/);
             return m ? m[1].toUpperCase() : '';
         }
-        // icono simple por tipo de archivo / mime
         function iconoPorMime(mime, ext) {
             const mm = (mime || '').toLowerCase();
             if (mm.includes('pdf') || ext === 'PDF') return '📄';
@@ -100,14 +97,13 @@
         // ===== Renderiza la lista en el <ul id="lista"> =====
         function pintarLista() {
             const ul = document.getElementById('lista');
-            ul.innerHTML = ''; // limpia la lista
+            ul.innerHTML = '';
 
             _filtrados.forEach(f => {
                 const li = document.createElement('li');
                 li.className = 'list-group-item list-group-item-action';
-                if (_seleccion === f.id) li.classList.add('active'); // marca seleccionado
+                if (_seleccion === f.id) li.classList.add('active');
 
-                // fila visual (icono + título 2 líneas + badge extensión)
                 const row = document.createElement('div');
                 row.className = 'file-row';
 
@@ -118,8 +114,8 @@
 
                 const title = document.createElement('div');
                 title.className = 'file-title';
-                title.textContent = nombreBonito(f.name || ''); // nombre “bonito”
-                title.title = f.name || ''; // tooltip con nombre completo
+                title.textContent = nombreBonito(f.name || '');
+                title.title = f.name || '';
 
                 const badge = document.createElement('span');
                 badge.className = 'badge-ext';
@@ -130,17 +126,15 @@
                 row.appendChild(badge);
                 li.appendChild(row);
 
-                // click para ver el documento
                 li.onclick = () => {
                     _seleccion = f.id;
                     ver(f.id, f.name);
-                    pintarLista(); // repinta para actualizar el 'active'
+                    pintarLista();
                 };
 
                 ul.appendChild(li);
             });
 
-            // contador al pie (si existe)
             const resumen = document.getElementById('resumenLista');
             if (resumen) resumen.textContent = `${_filtrados.length} documento${_filtrados.length === 1 ? '' : 's'}`;
         }
@@ -156,39 +150,47 @@
             pintarLista();
         }
 
+        // ===== Wrapper: fetch con redirección si 401 =====
+        async function fetchJsonOrLogin(url, options = {}) {
+            const r = await fetch(url, options);
+            if (r.status === 401) {
+                const returnUrl = encodeURIComponent(location.pathname + location.search);
+                location.href = `/Documento/Login?returnUrl=${returnUrl}`;
+                throw new Error("Re-login");
+            }
+            return r;
+        }
+
         // ===== Carga la lista desde el backend =====
         async function cargarLista() {
-            const r = await fetch('/Documento/Listar'); // petición GET
+            const r = await fetchJsonOrLogin('/Documento/Listar'); // << reemplazo
             if (!r.ok) { alert(await r.text()); return; }
-            _todos = await r.json();   // guarda todos los archivos
-            _filtrados = [..._todos];  // inicia sin filtro
-            pintarLista();             // pinta en pantalla
+            _todos = await r.json();
+            _filtrados = [..._todos];
+            pintarLista();
         }
 
         // ===== Mostrar documento (panel derecho o modal según pantalla) =====
         function ver(id, nombre) {
-
-            const urlPreview = `https://drive.google.com/file/d/${id}/preview`; // viewer HTML (no dispara descarga)
-            const urlAbrir = `https://drive.google.com/file/d/${id}/view`;    // abrir en pestaña
+            const urlPreview = `https://drive.google.com/file/d/${id}/preview`;
+            const urlAbrir = `https://drive.google.com/file/d/${id}/view`;
 
             if (esMovil()) {
-                // --- Modal (móvil / pantallas pequeñas) ---
                 document.getElementById('modalTitulo').textContent = nombre;
                 document.getElementById('modalAbrir').href = urlAbrir;
 
                 const wrapM = document.getElementById('previewWrapModal');
                 const iframeM = document.getElementById('vistaDocModal');
-                wrapM.classList.add('loading');       // muestra "Cargando…"
-                iframeM.src = urlPreview;             // carga el doc
+                wrapM.classList.add('loading');
+                iframeM.src = urlPreview;
                 iframeM.onload = () => wrapM.classList.remove('loading');
 
                 const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('previewModal'));
                 modal.show();
             } else {
-                // --- Panel derecho (escritorio) ---
                 document.getElementById('tituloDoc').textContent = nombre;
 
-                const btn = document.getElementById('btnAbrir'); // botón "Abrir en pestaña"
+                const btn = document.getElementById('btnAbrir');
                 btn.href = urlAbrir;
                 btn.classList.remove('disabled');
                 btn.removeAttribute('aria-disabled');
@@ -196,30 +198,30 @@
                 const wrap = document.getElementById('previewWrap');
                 const iframe = document.getElementById('vistaDoc');
                 iframe.style.display = 'block';
-                wrap.classList.add('loading');        // muestra "Cargando…"
-                iframe.src = urlPreview;              // carga el doc
+                wrap.classList.add('loading');
+                iframe.src = urlPreview;
                 iframe.onload = () => wrap.classList.remove('loading');
             }
         }
 
         // ===== Subir archivo - recarga lista - muestra el subido =====
         document.getElementById('archivoForm')?.addEventListener('submit', async (e) => {
-            e.preventDefault(); // no recargar página
+            e.preventDefault();
 
             const input = document.getElementById('archivo');
             if (!input?.files?.length) { alert('Selecciona un archivo.'); return; }
 
-            const fd = new FormData(); // objeto especial para enviar archivos
+            const fd = new FormData();
             fd.append('archivo', input.files[0]);
 
-            const resp = await fetch('/Documento/Subir', { method: 'POST', body: fd });
+            const resp = await fetchJsonOrLogin('/Documento/Subir', { method: 'POST', body: fd }); // << reemplazo
             if (!resp.ok) { alert("Error al subir: " + await resp.text()); return; }
 
-            const data = await resp.json(); // respuesta del backend (id, name, previewUrl)
-            await cargarLista();            // recarga lista desde Drive
-            _seleccion = data.id;           // marca el nuevo como seleccionado
-            ver(data.id, data.name ?? input.files[0].name); // abre el visor
-            pintarLista();                  // repinta para ver el 'active'
+            const data = await resp.json();
+            await cargarLista();
+            _seleccion = data.id;
+            ver(data.id, data.name ?? input.files[0].name);
+            pintarLista();
         });
 
         // ===== Buscador en vivo =====
@@ -229,3 +231,4 @@
         cargarLista();
     </script>
 }
+

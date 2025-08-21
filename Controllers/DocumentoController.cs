@@ -119,8 +119,8 @@ public class DocumentoController : Controller
         {
             var drive = await GetDriveAsync(); //cliente de google drive
             if (drive is null)
-                // si no hay drive (token vencido o sin refresh) forzamos re-login
-                return Challenge(new AuthenticationProperties { RedirectUri = Url.Action("Index", "Documento")! }, "Google");
+                //en el front se redirige 
+                return Unauthorized("Tu sesión con Google venció. Vuelve a iniciar sesión.");
 
             var idCarpeta = await crearCarpeta(drive);
 
@@ -134,8 +134,7 @@ public class DocumentoController : Controller
         }
         catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            // si Google responde 401, también forzamos re-login
-            return Challenge(new AuthenticationProperties { RedirectUri = Url.Action("Index", "Documento")! }, "Google");
+            return Unauthorized("Tu sesión con Google venció. Vuelve a iniciar sesión.");
         }
     }
 
@@ -151,10 +150,9 @@ public class DocumentoController : Controller
                 return BadRequest("Archivo vacío.");
             }
 
-            var drive = await GetDriveAsync(); 
+            var drive = await GetDriveAsync();
             if (drive is null)
-                // si no hay drive válido, forzamos re-login
-                return Challenge(new AuthenticationProperties { RedirectUri = Url.Action("Index", "Documento")! }, "Google");
+                return Unauthorized("Tu sesión con Google venció. Vuelve a iniciar sesión.");
 
             var idCarpeta = await crearCarpeta(drive);
 
@@ -179,8 +177,7 @@ public class DocumentoController : Controller
         }
         catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            // si Google responde 401, forzamos re-login
-            return Challenge(new AuthenticationProperties { RedirectUri = Url.Action("Index", "Documento")! }, "Google");
+            return Unauthorized("Tu sesión con Google venció. Vuelve a iniciar sesión.");
         }
         catch (Exception ex)
         {
